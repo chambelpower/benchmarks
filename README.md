@@ -36,7 +36,7 @@ If you have any questions or need assistance, please don't hesitate to reach out
 1. Clone the GitHub repository and install the requirements:
 
     ```bash
-    git clone https://github.com/speechbrain/benchmarks.git
+    git clone https://github.com/chambelpower/benchmarks.git
     cd benchmarks
     git submodule update --init --recursive
     cd speechbrain
