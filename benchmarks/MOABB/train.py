@@ -93,10 +93,10 @@ class MOABBBrain(sb.Brain):
         model_summary = summary(
             self.hparams.model, input_size=in_shape, device=self.device
         )
-        with open(
-            os.path.join(self.hparams.exp_dir, "model.txt"), "w"
-        ) as text_file:
-            text_file.write(str(model_summary))
+        #with open(
+        #    os.path.join(self.hparams.exp_dir, "model.txt"), "w"
+        #) as text_file:
+        #    text_file.write(str(model_summary))
 
     def on_stage_start(self, stage, epoch=None):
         "Gets called when a stage (either training, validation, test) starts."
