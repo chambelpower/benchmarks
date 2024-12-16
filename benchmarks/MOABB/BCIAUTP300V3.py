@@ -17,7 +17,7 @@ def calculate_continuous_onsets_and_labels(train_targets_file, test_targets_file
     onsets = np.linspace(0, (len(all_targets) - 1) * epoch_duration, len(all_targets))
     #onsets = np.linspace(0.2, 0.2 + (len(all_targets) - 1) * epoch_duration, len(all_targets))
 
-    print(onsets)
+    #print(onsets)
 
     # Create labels based on target values
     labels = ["Target" if value == 1 else "NonTarget" for value in all_targets]
@@ -70,11 +70,11 @@ class BCIAUTP300V3(BaseDataset):
             test_data = loadmat(test_data_path)['testData']
 
             # Debug print: file paths
-            print(f"\nSession {session_num}")
+            #print(f"\nSession {session_num}")
 
             # Print original shapes
-            print(f"Originalinal Train Data Shape: {train_data.shape}")
-            print(f"Original Test Data Shape: {test_data.shape}")
+            #print(f"Originalinal Train Data Shape: {train_data.shape}")
+            #print(f"Original Test Data Shape: {test_data.shape}")
 
             
 
@@ -83,14 +83,14 @@ class BCIAUTP300V3(BaseDataset):
             reshaped_test_data = test_data.transpose(0, 2, 1).reshape(test_data.shape[0], -1)
 
             # Print reshaped shapes
-            print(f"Reshaped Train Data Shape: {reshaped_train_data.shape}")
-            print(f"Reshaped Test Data Shape: {reshaped_test_data.shape}")
+            #print(f"Reshaped Train Data Shape: {reshaped_train_data.shape}")
+            #print(f"Reshaped Test Data Shape: {reshaped_test_data.shape}")
 
-            print(f"original_train_data[0, 0, 1] = {train_data[0, 0, 1]}")
-            print(f"reshaped_train_data[0, 350] = {reshaped_train_data[0, 350]}")
+            #print(f"original_train_data[0, 0, 1] = {train_data[0, 0, 1]}")
+            #print(f"reshaped_train_data[0, 350] = {reshaped_train_data[0, 350]}")
 
-            print(f"original_train_data[0, 0, 1] = {train_data[3, 50, 1]}")
-            print(f"reshaped_train_data[3, 400] = {reshaped_train_data[3, 400]}")
+            #print(f"original_train_data[0, 0, 1] = {train_data[3, 50, 1]}")
+            #print(f"reshaped_train_data[3, 400] = {reshaped_train_data[3, 400]}")
 
             # Concatenate train and test data
             concatenated_data = np.concatenate([reshaped_train_data, reshaped_test_data], axis=1)
@@ -103,8 +103,8 @@ class BCIAUTP300V3(BaseDataset):
             onsets, labels = calculate_continuous_onsets_and_labels(train_targets_path, test_targets_path)
 
             # Debug print: combined data dimensions, onsets, and labels
-            print(f"Combined Data Shape: {concatenated_data.shape}")
-            print(f"Onsets: {onsets}")
+            #print(f"Combined Data Shape: {concatenated_data.shape}")
+            #print(f"Onsets: {onsets}")
             # print(f"Labels: {labels}")
 
             # Create MNE info structure
@@ -118,7 +118,7 @@ class BCIAUTP300V3(BaseDataset):
             # Create annotations
             annotations = mne.Annotations(
                 onset=onsets,
-                duration=[1.4] * len(labels),
+                duration=[0] * len(labels),
                 description=labels
             )
 
@@ -126,7 +126,7 @@ class BCIAUTP300V3(BaseDataset):
             raw.set_annotations(annotations)
 
             # Debug print: annotations
-            print(f"Annotations: {raw.annotations}")
+            #print(f"Annotations: {raw.annotations}")
 
             # Store session data
             sessions[str(session_num - 1)] = {"0": raw}
