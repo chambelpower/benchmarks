@@ -51,7 +51,9 @@ class BCIAUTP300V3(BaseDataset):
         ch_names = ['C3', 'Cz', 'C4', 'CPz', 'P3', 'Pz', 'P4', 'POz']
         ch_types = ['eeg'] * 8
         subject_str = f'{subject:02d}' if subject < 10 else str(subject)
-        base_path = f'C:\\Users\\diver\\benchmarks\\benchmarks\\MOABB\\data\\SBJ{subject_str}'
+
+        # Assuming this script is in the MOABB directory or being run from it
+        base_path = os.path.join(os.path.dirname(__file__), "data", f"SBJ{subject_str}")
         sessions = {}
 
         for session_num in range(1, 8):
