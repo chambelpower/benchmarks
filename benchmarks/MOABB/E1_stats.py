@@ -180,9 +180,9 @@ def load_data_v2(hparams, output_folder, target_subject_idx, target_session_idx)
     return x_test, y_test
 
 
-def evaluate_model(subject_path, model_path, experiment_number):
+def evaluate_model(subject_path, model_path, experiment_number, subject, session):
 
-    concatenated_data, all_targets = load_data_v2('hparams/P300/BCIAUTP300/EEGNet11.yaml', 'results/P300/BCIAUTP300/E11/', '1', '0')    
+    concatenated_data, all_targets = load_data_v2('hparams/P300/BCIAUTP300/EEGNet' + experiment_number +'.yaml', 'results/P300/BCIAUTP300/' + experiment_number + '/', str(int(subject)), session)    
 
     model = load_model(model_path, experiment_number)
 
@@ -222,9 +222,9 @@ if __name__ == "__main__":
     experiment = 'E1'
 
     # Subjects and runs (update with your specific structure)
-    runs = [f"run{i}" for i in range(1, 2)]  
-    subjects = [f"sub-{str(i).zfill(3)}" for i in range(1, 2)] 
-    sessions = [str(j) for j in range(2)] 
+    runs = [f"run{i}" for i in range(1, 11)]  
+    subjects = [f"sub-{str(i).zfill(3)}" for i in range(1, 16)] 
+    sessions = [str(j) for j in range(7)] 
 
     bin_accuracies = {}
     final_accuracy = {}
@@ -246,7 +246,7 @@ if __name__ == "__main__":
 
                 path3 = os.path.join(os.path.dirname(__file__), 'data', 'SBJ' + str(subject[-2]) + str(subject[-1]), 'S0' + str(int(session) + 1))
 
-                acc1, acc2 = evaluate_model(path3, model_path, experiment[-2:])
+                acc1, acc2 = evaluate_model(path3, model_path, experiment[-2:], str(subject[-2]) + str(subject[-1]), session)
 
                 model_info = run + subject + "sess" + session
 
