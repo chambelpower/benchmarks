@@ -15,9 +15,6 @@ def calculate_continuous_onsets_and_labels(train_targets_file, test_targets_file
 
     # Calculate continuous onset times (ensuring length matches targets)
     onsets = np.linspace(0, (len(all_targets) - 1) * epoch_duration, len(all_targets))
-    #onsets = np.linspace(0.2, 0.2 + (len(all_targets) - 1) * epoch_duration, len(all_targets))
-
-    #print(onsets)
 
     # Create labels based on target values
     labels = ["Target" if value == 1 else "NonTarget" for value in all_targets]
@@ -25,9 +22,6 @@ def calculate_continuous_onsets_and_labels(train_targets_file, test_targets_file
     # Sanity check
     if len(onsets) != len(labels):
         raise ValueError("Mismatch between onsets and labels length.")
-
-    #for i in range(len(onsets)):
-    #    print("Onset: ", onsets[i], " -> ", labels[i])
 
     return onsets, labels
 
@@ -55,6 +49,7 @@ class BCIAUTP300V3(BaseDataset):
         # Assuming this script is in the MOABB directory or being run from it
         base_path = os.path.join(os.path.dirname(__file__), "data", f"SBJ{subject_str}")
         sessions = {}
+        print('BASE PATH: ', base_path)
 
         for session_num in range(1, 8):
             session_str = f'S{session_num:02d}'
@@ -71,43 +66,18 @@ class BCIAUTP300V3(BaseDataset):
             train_data = loadmat(train_data_path)['trainData']
             test_data = loadmat(test_data_path)['testData']
 
-            # Debug print: file paths
-            #print(f"\nSession {session_num}")
-
-            # Print original shapes
-            #print(f"Originalinal Train Data Shape: {train_data.shape}")
-            #print(f"Original Test Data Shape: {test_data.shape}")
-
-            
-
             # Reshape train and test data to [channels x (epoch * event)]
             reshaped_train_data = train_data.transpose(0, 2, 1).reshape(train_data.shape[0], -1)
             reshaped_test_data = test_data.transpose(0, 2, 1).reshape(test_data.shape[0], -1)
 
-            # Print reshaped shapes
-            #print(f"Reshaped Train Data Shape: {reshaped_train_data.shape}")
-            #print(f"Reshaped Test Data Shape: {reshaped_test_data.shape}")
-
-            #print(f"original_train_data[0, 0, 1] = {train_data[0, 0, 1]}")
-            #print(f"reshaped_train_data[0, 350] = {reshaped_train_data[0, 350]}")
-
-            #print(f"original_train_data[0, 0, 1] = {train_data[3, 50, 1]}")
-            #print(f"reshaped_train_data[3, 400] = {reshaped_train_data[3, 400]}")
-
             # Concatenate train and test data
             concatenated_data = np.concatenate([reshaped_train_data, reshaped_test_data], axis=1)
 
-            # Optional: Print concatenated shape
-            print(f"Concatenated Data Shape: {concatenated_data.shape}")
-
+            padding = int(sfreq * (1.2 + 0.2))  # tmax + abs(tmin)
+            concatenated_data = np.pad(concatenated_data, ((0, 0), (0, padding)), mode='constant')
 
             # Calculate continuous onsets and labels
             onsets, labels = calculate_continuous_onsets_and_labels(train_targets_path, test_targets_path)
-
-            # Debug print: combined data dimensions, onsets, and labels
-            #print(f"Combined Data Shape: {concatenated_data.shape}")
-            #print(f"Onsets: {onsets}")
-            # print(f"Labels: {labels}")
 
             # Create MNE info structure
             info = mne.create_info(ch_names, sfreq, ch_types)
@@ -126,9 +96,6 @@ class BCIAUTP300V3(BaseDataset):
 
             # Set annotations to the raw object
             raw.set_annotations(annotations)
-
-            # Debug print: annotations
-            #print(f"Annotations: {raw.annotations}")
 
             # Store session data
             sessions[str(session_num - 1)] = {"0": raw}
