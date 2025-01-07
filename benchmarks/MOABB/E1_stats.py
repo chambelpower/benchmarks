@@ -46,14 +46,14 @@ def model_single_predict(model, eeg_sample):
 
 def predict(model, eeg_data):
     """
-    Predict P300 labels for pre-split EEG samples.
+    Predict P300 targets for pre-split EEG samples.
 
     Parameters:
         model: The trained model to use for predictions.
         eeg_data (ndarray): EEG data with shape [samples x timepoints x channels].
 
     Returns:
-        predictions (list): Predicted labels (0 or 1) for each sample.
+        predictions (list): Predicted targets (0 or 1) for each sample.
     """
     bin_predictions = []
     p300_prob_array = []
@@ -78,37 +78,48 @@ def predict(model, eeg_data):
 
 
 
-def evaluate(bin_predictions, p300_prob_array, labels):
+def evaluate(bin_predictions, p300_prob_array, targets, events, labels, runs_per_block_test):
     """Evaluates the model's predictions."""
     # Binary accuracy
-    bin_accuracy = np.mean(bin_predictions == labels)
+    bin_accuracy = np.mean(bin_predictions == targets)
 
-    # Final accuracy based on blocks of 8
-    n_blocks = len(labels) // 8  # Number of blocks
-    correct = 0
+    total_targets = len(targets)
+    total_blocks = 0
+    correct_blocks = 0
 
-    for i in range(n_blocks):
-        start_idx = i * 8
-        end_idx = start_idx + 8
+    print(len(bin_predictions))
+    print(len(p300_prob_array))
+    print(len(targets))
+    print(len(events))
+    print(len(labels))
+    print(runs_per_block_test)
 
-        # Extract the block of P300 probabilities and corresponding labels
-        block_probs = p300_prob_array[start_idx:end_idx]
-        block_labels = labels[start_idx:end_idx]
+    i = 0
+    while i < total_targets:
+        target_array = [0, 0, 0, 0, 0, 0, 0, 0]
+        
+        if i < 1600:  # Meaning it's training
+            n_blocks = 10
+        else:
+            n_blocks = runs_per_block_test
 
-        #print(block_probs)
-        #print(block_labels)
+        for j in range(n_blocks):
+            for k in range(8):
+                event_idx = events[i]
+                target_array[event_idx - 1] += p300_prob_array[i]
+                i += 1
 
-        # Find the index of the highest probability in the block
-        max_prob_idx = np.argmax(block_probs)
+        m = max(target_array)
 
-        # Check if the label at this index is 1
-        if block_labels[max_prob_idx] == 1:
-            correct += 1
+        # Check if the label matches the index with the highest P300 probability
+        if labels[total_blocks] == target_array.index(m) + 1:
+            correct_blocks += 1
 
-    # Calculate final accuracy
-    final_accuracy = correct / n_blocks
+        total_blocks += 1
 
+    final_accuracy = correct_blocks / total_blocks
     return bin_accuracy, final_accuracy
+
 
 
 def load_model(model_path, experiment_number):
@@ -140,7 +151,7 @@ def load_model(model_path, experiment_number):
 
     return model
 
-def load_data_v2(hparams, output_folder, target_subject_idx, target_session_idx):
+def load_data_v2(hparams, output_folder, target_subject_idx, target_session_idx, subject_path):
     # Define the command and its arguments
     command = [
         "python",
@@ -172,17 +183,28 @@ def load_data_v2(hparams, output_folder, target_subject_idx, target_session_idx)
 
     print("Test dataset loaded successfully")
 
-    print('X: ', x_test.shape)
+    #print('X: ', x_test.shape)
     #print(x_test)
-    print('Y: ', y_test.shape)
+    #print('Y: ', y_test.shape)
     #print(y_test)
 
-    return x_test, y_test
+
+    train_events = np.loadtxt(os.path.join(subject_path, 'Train', 'trainEvents.txt'), dtype=int)
+    test_events = np.loadtxt(os.path.join(subject_path, 'Test', 'testEvents.txt'), dtype=int)
+    total_events = np.concatenate((train_events, test_events))
+
+    train_labels = np.loadtxt(os.path.join(subject_path, 'Train', 'trainLabels.txt'), dtype=int)
+    test_labels = np.loadtxt(os.path.join(subject_path, 'Test', 'testLabels.txt'), dtype=int)
+    total_labels = np.concatenate((train_labels, test_labels))
+    
+    runs_per_block_test = np.loadtxt(os.path.join(subject_path, 'Test', 'runs_per_block.txt'), dtype=int)
+
+    return x_test, y_test, total_events, total_labels, runs_per_block_test
 
 
 def evaluate_model(subject_path, model_path, experiment_number, subject, session):
 
-    concatenated_data, all_targets = load_data_v2('hparams/P300/BCIAUTP300/EEGNet' + experiment_number +'.yaml', 'results/P300/BCIAUTP300/' + experiment_number + '/', str(int(subject)), session)    
+    concatenated_data, all_targets, events, labels, runs_per_block_test = load_data_v2('hparams/P300/BCIAUTP300/EEGNet' + experiment_number +'.yaml', 'results/P300/BCIAUTP300/' + experiment_number + '/', subject, session, subject_path)    
 
     model = load_model(model_path, experiment_number)
 
@@ -193,7 +215,7 @@ def evaluate_model(subject_path, model_path, experiment_number, subject, session
     # Predict and evaluate
     
     bin_predictions, p300_prob_array = predict(model, concatenated_data)
-    bin_accuracy, final_accuracy = evaluate(bin_predictions, p300_prob_array, all_targets)
+    bin_accuracy, final_accuracy = evaluate(bin_predictions, p300_prob_array, all_targets, events, labels, runs_per_block_test)
     
     print(f"Binary Model Accuracy: {bin_accuracy * 100:.2f}%")
     print(f"Final Model Accuracy: {final_accuracy * 100:.2f}%")
@@ -219,7 +241,7 @@ def get_most_recent_folder_path(parent_path):
 if __name__ == "__main__":
 
     # Specific experiment get stats about
-    experiment = 'E1'
+    experiment = 'E3'
 
     # Subjects and runs (update with your specific structure)
     runs = [f"run{i}" for i in range(1, 11)]  
@@ -242,11 +264,11 @@ if __name__ == "__main__":
                 
                 timestamp_folder = get_most_recent_folder_path(path2)
 
-                model_path = os.path.join(timestamp_folder, 'model.ckpt')
+                model_path = os.path.join(timestamp_folder, 'model.ckpt') 
 
                 path3 = os.path.join(os.path.dirname(__file__), 'data', 'SBJ' + str(subject[-2]) + str(subject[-1]), 'S0' + str(int(session) + 1))
 
-                acc1, acc2 = evaluate_model(path3, model_path, experiment[-2:], str(subject[-2]) + str(subject[-1]), session)
+                acc1, acc2 = evaluate_model(path3, model_path, experiment[-1:], str(int(subject[-2]) * 10 + int(subject[-1]) - 1), session)
 
                 model_info = run + subject + "sess" + session
 
