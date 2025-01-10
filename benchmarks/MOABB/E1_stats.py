@@ -317,9 +317,9 @@ if __name__ == "__main__":
     experiment = 'E1'
 
     # Subjects and runs (update with your specific structure)
-    runs = [f"run{i}" for i in range(1, 2)]  
-    subjects = [f"sub-{str(i).zfill(3)}" for i in range(1, 2)] 
-    sessions = [str(j) for j in range(2)] 
+    runs = [f"run{i}" for i in range(1, 11)]  
+    subjects = [f"sub-{str(i).zfill(3)}" for i in range(1, 16)] 
+    sessions = [str(j) for j in range(7)] 
 
     bin_stats = {}
     final_stats = {}
