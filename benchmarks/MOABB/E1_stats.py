@@ -14,6 +14,10 @@ import subprocess
 from torch.utils.data import TensorDataset, DataLoader
 import pickle
 
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, matthews_corrcoef, confusion_matrix
+)
+
 def model_single_predict(model, eeg_sample):
     """
     Predict probabilities for a single EEG sample.
@@ -76,27 +80,67 @@ def predict(model, eeg_data):
 
     return bin_predictions, p300_prob_array
 
+def calculate_metrics(y_true, y_pred, y_prob=None):
 
+    if len(set(y_true)) == 2:  # Binary classification
+        average = 'binary'
+    else:  # Multiclass classification
+        average = 'macro'
+
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred, average=average) 
+    recall = recall_score(y_true, y_pred, average=average)
+    f1 = f1_score(y_true, y_pred, average=average)
+    mcc = matthews_corrcoef(y_true, y_pred)
+
+    if average == 'binary':
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+        specificity = tn / (tn + fp)
+    else:
+        specificity = None
+    
+    if y_prob is not None:
+        if average == 'binary':
+            auc_roc = roc_auc_score(y_true, y_prob)
+        else:
+            auc_roc = roc_auc_score(y_true, y_prob, multi_class='ovo', average=average)
+    else:
+        auc_roc = None
+    
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall (Sensitivity): {recall:.4f}")
+    print(f"F1 Score: {f1:.4f}")
+    if specificity is not None:
+        print(f"Specificity: {specificity:.4f}")
+    print(f"MCC: {mcc:.4f}")
+    if auc_roc is not None:
+        print(f"AUC-ROC: {auc_roc:.4f}")
+    else:
+        print("AUC-ROC: Not calculated (requires predicted probabilities).")
+    
+    return {
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1,
+        "specificity": specificity,
+        "mcc": mcc,
+        "auc_roc": auc_roc
+    }
 
 def evaluate(bin_predictions, p300_prob_array, targets, events, labels, runs_per_block_test):
     """Evaluates the model's predictions."""
-    # Binary accuracy
-    bin_accuracy = np.mean(bin_predictions == targets)
 
-    total_targets = len(targets)
-    total_blocks = 0
-    correct_blocks = 0
+    bin_stats = calculate_metrics(targets, bin_predictions, p300_prob_array)
 
-    print(len(bin_predictions))
-    print(len(p300_prob_array))
-    print(len(targets))
-    print(len(events))
-    print(len(labels))
-    print(runs_per_block_test)
-
+    final_pred = []
+    final_pred_prob = []
+    
     i = 0
-    while i < total_targets:
-        target_array = [0, 0, 0, 0, 0, 0, 0, 0]
+    while i < len(targets):
+        # Initialize target_array as a NumPy array of zeros
+        target_array = np.zeros(8)
         
         if i < 1600:  # Meaning it's training
             n_blocks = 10
@@ -109,16 +153,22 @@ def evaluate(bin_predictions, p300_prob_array, targets, events, labels, runs_per
                 target_array[event_idx - 1] += p300_prob_array[i]
                 i += 1
 
-        m = max(target_array)
+        # Normalize the target_array to make it sum to 1
+        total = np.sum(target_array)
+        if total > 0:
+            target_array /= total  # Normalize so that the sum of the array equals 1
 
-        # Check if the label matches the index with the highest P300 probability
-        if labels[total_blocks] == target_array.index(m) + 1:
-            correct_blocks += 1
+        # Find the index of the maximum value in target_array
+        m = np.max(target_array)
 
-        total_blocks += 1
+        # Append the class with the highest probability
+        final_pred.append(np.argmax(target_array) + 1)
+        # Normalize the target_array by dividing by 8
+        final_pred_prob.append(target_array)
 
-    final_accuracy = correct_blocks / total_blocks
-    return bin_accuracy, final_accuracy
+    final_stats = calculate_metrics(labels, final_pred, final_pred_prob)
+
+    return bin_stats, final_stats
 
 
 
@@ -215,12 +265,10 @@ def evaluate_model(subject_path, model_path, experiment_number, subject, session
     # Predict and evaluate
     
     bin_predictions, p300_prob_array = predict(model, concatenated_data)
-    bin_accuracy, final_accuracy = evaluate(bin_predictions, p300_prob_array, all_targets, events, labels, runs_per_block_test)
-    
-    print(f"Binary Model Accuracy: {bin_accuracy * 100:.2f}%")
-    print(f"Final Model Accuracy: {final_accuracy * 100:.2f}%")
+    bin_stats, final_stats = evaluate(bin_predictions, p300_prob_array, all_targets, events, labels, runs_per_block_test)
 
-    return bin_accuracy, final_accuracy
+
+    return bin_stats, final_stats
 
 
 # Helper function to get the most recent folder in a directory
@@ -238,18 +286,43 @@ def get_most_recent_folder_path(parent_path):
     except Exception as e:
         raise ValueError(f"Error accessing folder in {parent_path}: {e}")
 
+def write_all_metrics_to_file(all_metrics, file_path):
+    """
+    Write the metrics for all models to a file.
+
+    Parameters:
+    - all_metrics: list of dict, Each dict contains metrics for one model.
+    - file_path: str, Path to the output file.
+    """
+    with open(file_path, "w") as file:
+        # Write header
+        headers = ["accuracy", "precision", "recall", "f1_score", "specificity", "mcc", "auc_roc"]
+        file.write("\t".join(headers) + "\n")
+        
+        # Write metrics for each model
+        for metrics in all_metrics:
+            if isinstance(metrics, dict):  # Ensure that metrics is a dictionary
+                line = "\t".join(
+                    f"{metrics.get(metric, 'N/A') * 100:.2f}" if metrics.get(metric) is not None else "N/A"
+                    for metric in headers
+                )
+                file.write(line + "\n")
+            else:
+                file.write("Invalid metrics data\n")
+
+
 if __name__ == "__main__":
 
     # Specific experiment get stats about
-    experiment = 'E3'
+    experiment = 'E1'
 
     # Subjects and runs (update with your specific structure)
-    runs = [f"run{i}" for i in range(1, 11)]  
-    subjects = [f"sub-{str(i).zfill(3)}" for i in range(1, 16)] 
-    sessions = [str(j) for j in range(7)] 
+    runs = [f"run{i}" for i in range(1, 2)]  
+    subjects = [f"sub-{str(i).zfill(3)}" for i in range(1, 2)] 
+    sessions = [str(j) for j in range(2)] 
 
-    bin_accuracies = {}
-    final_accuracy = {}
+    bin_stats = {}
+    final_stats = {}
  
     # Iterate through each run, subject, and session
     for run in runs:
@@ -268,34 +341,26 @@ if __name__ == "__main__":
 
                 path3 = os.path.join(os.path.dirname(__file__), 'data', 'SBJ' + str(subject[-2]) + str(subject[-1]), 'S0' + str(int(session) + 1))
 
-                acc1, acc2 = evaluate_model(path3, model_path, experiment[-1:], str(int(subject[-2]) * 10 + int(subject[-1]) - 1), session)
+                stats1, stats2 = evaluate_model(path3, model_path, experiment[-1:], str(int(subject[-2]) * 10 + int(subject[-1]) - 1), session)
 
                 model_info = run + subject + "sess" + session
 
-                bin_accuracies[model_info] = acc1
-                final_accuracy[model_info] = acc2
+                bin_stats[model_info] = stats1
+                final_stats[model_info] = stats2
                     
                 #except Exception as e:
                 #    print(f"Error processing {run}, {subject}, session {session}: {e}")
 
     # Specify the TXT file path
-    file_path = experiment + "_binary_accuracies.txt"
+    file_path = experiment + "_binary_stats.txt"
+    all_metrics = list(bin_stats.values())
 
-    # Write to the TXT file
-    with open(file_path, "w") as file:
-        for accuracy in bin_accuracies.values():
-            # Write each accuracy on a new line
-            file.write(f"{accuracy* 100:.2f}\n")
-
-    print(f"Binary accuracies saved to {file_path}")
+    write_all_metrics_to_file(all_metrics, file_path)
 
     # Specify the TXT file path
-    file_path = experiment + "_final_accuracies.txt"
+    file_path = experiment + "_final_stats.txt"
+    all_metrics = list(final_stats.values())
 
-    # Write to the TXT file
-    with open(file_path, "w") as file:
-        for accuracy in final_accuracy.values():
-            # Write each accuracy on a new line
-            file.write(f"{accuracy* 100:.2f}\n")
+    write_all_metrics_to_file(all_metrics, file_path)
 
-    print(f"Final accuracies saved to {file_path}")
+    
